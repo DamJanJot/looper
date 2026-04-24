@@ -1,4 +1,4 @@
-# Neon Loop Station 3.0 MIDI Pads
+# Loop Station MIDI Pads
 
 Wgraj katalog na serwer PHP i otwórz `index.php`.
 
@@ -23,3 +23,7 @@ Próbki zapisane w kitach są kodowane do JSON, więc bardzo długie nagrania mo
 - Zmiana oktawy −/+ aktualizuje zakres nut i przesuwa wizualny pasek pianina.
 - Dodano dużo więcej brzmień padów: kicki, werble, hihaty, perkusjonalia, basy, pianina, chordy, pady, leady, FX i vox.
 - Dodano więcej instrumentów MIDI, w tym zwykłe Grand Piano, Soft Piano i Bright Piano.
+
+
+
+<img width="1052" height="1749" alt="image" src="https://github.com/user-attachments/assets/95c068fc-3031-46d6-8cf3-75cfcda7278f" />
