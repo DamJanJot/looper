@@ -14,6 +14,13 @@ Wgraj katalog na serwer PHP i otwórz `index.php`.
 ## MIDI
 Web MIDI działa najlepiej w Chrome/Edge. Strona musi być uruchomiona przez HTTPS albo lokalnie (`localhost`). Podłącz klawiaturę USB, kliknij „Połącz MIDI” i wybierz tryb grania.
 
+## 5.0 MIDI Trainer
+- Dodano panel `Trener MIDI` z prostymi lekcjami na klawiaturę.
+- Nuty spadają w stylu Guitar Hero i trzeba grać je, gdy dochodzą do zielonej linii.
+- Trener liczy wynik, combo, trafienia i pudła.
+- Lekcje rozpoznają nazwę nuty niezależnie od oktawy, co lepiej pasuje do małych klawiatur MIDI.
+- `index.html` jest statyczną wersją do GitHub Pages; `index.php` zostaje dla hostingu PHP.
+
 ## Uwaga
 Próbki zapisane w kitach są kodowane do JSON, więc bardzo długie nagrania mogą robić duże pliki. Do padów najlepiej używać krótkich sampli.
 
