@@ -22,6 +22,7 @@ const MIDI_INSTRUMENTS=[
 let midiState={instrument:'piano-grand',octave:0,volume:.85};
 const activeMidiNotes=new Set();
 const pcKeys=['z','s','x','d','c','v','g','b','h','n','j','m','q','2','w','3','e','r','5','t','6','y','7','u'];
+const PIANO_BASE_NOTE=48, PIANO_KEY_COUNT=32;
 const PITCH_NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const TRAINER_LESSONS=[
  {id:'first-five',name:'Pierwsze 5 nut: C D E F G',bpm:72,notes:[60,62,64,65,67,65,64,62,60]},
@@ -115,7 +116,8 @@ function playMidiInstrument(note,vel=1,t=ctx.currentTime){initAudio();let f=midi
  else if(inst.includes('chip'))osc('square',f,.25,t,v*.3); else if(inst==='kalimba'||inst==='marimba'||inst==='musicbox'){osc('triangle',f,.45,t,v*.28);osc('sine',f*3,.25,t,v*.08)}
  else {osc(inst.includes('square')?'square':'sawtooth',f,.55,t,v*.28);}
 }
-function updatePianoViewport(){let strip=$('pianoStrip'); if(strip)strip.style.transform=`translateX(${-midiState.octave*72}px)`; $('octaveLabel').textContent=midiState.octave; let r=$('octaveRange'); if(r)r.textContent=`Zakres: ${noteName(60+12*midiState.octave)} – ${noteName(83+12*midiState.octave)}`;}
+function pianoStartNote(){return PIANO_BASE_NOTE+12*midiState.octave}
+function updatePianoViewport(){let strip=$('pianoStrip'); if(strip)strip.style.transform='translateX(0)'; $('octaveLabel').textContent=midiState.octave; let r=$('octaveRange'),start=pianoStartNote(); if(r)r.textContent=`Zakres: ${noteName(start)} – ${noteName(start+PIANO_KEY_COUNT-1)}`;}
 function noteName(note){return ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'][note%12]+(Math.floor(note/12)-1)}
 function updateActivePiano(){document.querySelectorAll('.pkey.held').forEach(x=>x.classList.remove('held'));activeMidiNotes.forEach(n=>{let e=document.querySelector(`[data-note="${n}"]`); if(e)e.classList.add('held')})}
 function midiData(){return {...midiState,mode:$('midiMode').value}}
@@ -124,7 +126,7 @@ function saveMidiPreset(){localStorage.setItem('neonMidiPreset',JSON.stringify(m
 function loadMidiPreset(){let d=JSON.parse(localStorage.getItem('neonMidiPreset')||'null'); if(d)applyMidiData(d); else status('brak zapisanego presetu MIDI')}
 function downloadMidiPreset(){downloadBlob(new Blob([JSON.stringify(midiData(),null,2)],{type:'application/json'}),'neon-midi-preset.json')}
 function drawMidiInstruments(){MIDI_INSTRUMENTS.forEach(i=>{let o=document.createElement('option');o.value=i[0];o.textContent=i[1];$('midiInstrument').appendChild(o)});$('midiInstrument').value=midiState.instrument}
-function drawPiano(){let el=$('piano'); if(!el)return; el.innerHTML='<div class="piano-top"><b id="octaveRange"></b><span>Aktywne nuty świecą na zielono. Octave −/+ przesuwa widok.</span></div><div id="pianoStrip" class="piano-strip"></div>'; let strip=$('pianoStrip'); const start=60+12*midiState.octave; for(let n=0;n<24;n++){let note=start+n,semi=note%12,isBlack=[1,3,6,8,10].includes(semi);let k=document.createElement('button');k.className='pkey '+(isBlack?'black':'white');k.dataset.note=note;k.dataset.rawnote=note-12*midiState.octave;let name=noteName(note);k.innerHTML='<span>'+name+'</span><small>'+(pcKeys[n]||'')+'</small>';k.onmousedown=()=>triggerMidiNote(note,1);k.onmouseup=()=>releaseMidiNote(note);k.onmouseleave=()=>releaseMidiNote(note);k.onclick=()=>{};strip.appendChild(k)}updatePianoViewport();updateActivePiano()}
+function drawPiano(){let el=$('piano'); if(!el)return; el.innerHTML='<div class="piano-top"><b id="octaveRange"></b><span>Aktywne nuty świecą na zielono. Octave −/+ przesuwa widok.</span></div><div id="pianoStrip" class="piano-strip"></div>'; let strip=$('pianoStrip'); const start=pianoStartNote(); for(let n=0;n<PIANO_KEY_COUNT;n++){let note=start+n,semi=note%12,isBlack=[1,3,6,8,10].includes(semi);let k=document.createElement('button');k.className='pkey '+(isBlack?'black':'white');k.dataset.note=note;k.dataset.rawnote=note-12*midiState.octave;let name=noteName(note);k.innerHTML='<span>'+name+'</span><small>'+(pcKeys[n]||'')+'</small>';k.onmousedown=()=>triggerMidiNote(note,1);k.onmouseup=()=>releaseMidiNote(note);k.onmouseleave=()=>releaseMidiNote(note);k.onclick=()=>{};strip.appendChild(k)}updatePianoViewport();updateActivePiano()}
 function flashPiano(note){let e=document.querySelector(`[data-note="${note}"]`); if(e){e.classList.add('active');setTimeout(()=>e.classList.remove('active'),140)}}
 function pitchName(note){return PITCH_NAMES[((note%12)+12)%12]}
 function trainerPitch(note){return ((note%12)+12)%12}
@@ -153,8 +155,8 @@ async function midi(){
    if(type===144&&vel>0){
     let mode=$('midiMode').value;
     if(mode==='instrument'){
-     let vs=60+12*midiState.octave;
-     if(note<vs||note>=vs+24){midiState.octave=Math.max(-4,Math.min(4,Math.round((note-60)/12)));drawPiano();}
+     let vs=pianoStartNote();
+     if(note<vs||note>=vs+PIANO_KEY_COUNT){midiState.octave=Math.max(-4,Math.min(4,Math.round((note-PIANO_BASE_NOTE)/12)));drawPiano();}
      triggerMidiNote(note,vel/127);
     }
     else if(mode==='pads'){let idx=note-48;if(idx>=0&&idx<16)playPad(idx,ctx.currentTime,vel/127)}
@@ -164,8 +166,8 @@ async function midi(){
  }
  $('midiStatus').textContent='MIDI: '+(names.join(', ')||'brak wejść');
 }
-document.addEventListener('keydown',e=>{if(e.repeat)return;let k=e.key.toLowerCase();if(learnPad!==null){pads[learnPad].key=k;learnPad=null;drawPads();status('klawisz przypisany');return}let i=pads.findIndex(p=>p.key===k);if(i>=0){e.preventDefault();playPad(i);return}let pi=pcKeys.indexOf(k);if(pi>=0){e.preventDefault();triggerMidiNote(60+12*midiState.octave+pi,1)}});
-document.addEventListener('keyup',e=>{let pi=pcKeys.indexOf(e.key.toLowerCase()); if(pi>=0)releaseMidiNote(60+12*midiState.octave+pi)});
+document.addEventListener('keydown',e=>{if(e.repeat)return;let k=e.key.toLowerCase();if(learnPad!==null){pads[learnPad].key=k;learnPad=null;drawPads();status('klawisz przypisany');return}let i=pads.findIndex(p=>p.key===k);if(i>=0){e.preventDefault();playPad(i);return}let pi=pcKeys.indexOf(k);if(pi>=0){e.preventDefault();triggerMidiNote(pianoStartNote()+pi,1)}});
+document.addEventListener('keyup',e=>{let pi=pcKeys.indexOf(e.key.toLowerCase()); if(pi>=0)releaseMidiNote(pianoStartNote()+pi)});
 $('bootBtn').onclick=initAudio;$('playBtn').onclick=play;$('stopBtn').onclick=stop;$('recBtn').onclick=record;$('exportBtn').onclick=exportWav;$('randomKitBtn').onclick=randomKit;$('saveKitBtn').onclick=saveKit;$('loadKitBtn').onclick=loadKit;$('downloadKitBtn').onclick=downloadKit;$('saveProjectBtn').onclick=saveProject;$('loadProjectBtn').onclick=loadProject;$('clearBtn').onclick=clearAll;$('uploadBtn').onclick=upload;$('playSampleBtn').onclick=()=>{let b=edited();if(b){let s=ctx.createBufferSource(),g=gainNode(+$('sampleGain').value);s.buffer=b;s.playbackRate.value=+$('pitch').value;s.connect(g).connect(master);s.start()}};$('reverseBtn').onclick=reverse;$('normalizeBtn').onclick=()=>normalize(currentBuffer);$('cropBtn').onclick=()=>{let b=edited();if(b){currentBuffer=b;drawWave(b);status('przycięto')}};$('assignSampleBtn').onclick=assignSample;$('chopBtn').onclick=chop;$('midiBtn').onclick=midi;$('midiInstrument').onchange=e=>{midiState.instrument=e.target.value;status('brzmienie MIDI: '+e.target.selectedOptions[0].textContent)};$('midiVol').oninput=e=>midiState.volume=+e.target.value;$('octDown').onclick=()=>{midiState.octave=Math.max(-4,midiState.octave-1);drawPiano();status('oktawa MIDI: '+midiState.octave)};$('octUp').onclick=()=>{midiState.octave=Math.min(4,midiState.octave+1);drawPiano();status('oktawa MIDI: '+midiState.octave)};$('saveMidiBtn').onclick=saveMidiPreset;$('loadMidiBtn').onclick=loadMidiPreset;$('downloadMidiBtn').onclick=downloadMidiPreset;$('soundSearch').oninput=drawSounds;$('importKit').onchange=e=>{let f=e.target.files[0];if(!f)return;f.text().then(t=>loadKitObj(JSON.parse(t)))};$('importMidi').onchange=e=>{let f=e.target.files[0];if(!f)return;f.text().then(t=>applyMidiData(JSON.parse(t)))};
 $('trainerStartBtn').onclick=trainerStart;$('trainerStopBtn').onclick=()=>trainerStop();$('trainerPreviewBtn').onclick=trainerPreview;
 ['masterVol','filterType','cutoff','resonance','delayTime','feedback','delayMix','reverbMix','drive','crush'].forEach(id=>$(id).oninput=updateFx);['trimStart','trimEnd'].forEach(id=>$(id).oninput=()=>currentBuffer&&drawWave(currentBuffer));$('steps').onchange=drawSeq;Object.keys(presets).forEach(n=>{let o=document.createElement('option');o.textContent=n;$('presetSelect').appendChild(o)});$('presetSelect').onchange=e=>applyPreset(e.target.value);

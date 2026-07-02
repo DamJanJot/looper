@@ -19,6 +19,7 @@ Web MIDI działa najlepiej w Chrome/Edge. Strona musi być uruchomiona przez HTT
 - Nuty spadają w stylu Guitar Hero i trzeba grać je, gdy dochodzą do zielonej linii.
 - Trener liczy wynik, combo, trafienia i pudła.
 - Lekcje rozpoznają nazwę nuty niezależnie od oktawy, co lepiej pasuje do małych klawiatur MIDI.
+- `trainer.html` to osobna, pełnoekranowa strona ćwiczeń z klawiaturą C3-G5 ustawioną na dole.
 - `index.html` jest statyczną wersją do GitHub Pages; `index.php` zostaje dla hostingu PHP.
 
 ## Uwaga

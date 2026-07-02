@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MIDI Trainer C3-G5</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="assets/trainer.css">
+</head>
+<body>
+  <main class="trainer-app">
+    <header class="trainer-top">
+      <a href="index.html" class="back-link">Looper</a>
+      <h1>Trener MIDI <span>C3-G5</span></h1>
+      <div class="top-actions">
+        <button id="audioBtn" class="primary">Audio</button>
+        <button id="midiBtn">MIDI</button>
+        <button id="previewBtn">Odsłuch</button>
+        <button id="startBtn" class="primary">Start</button>
+        <button id="stopBtn">Stop</button>
+      </div>
+    </header>
+
+    <section class="trainer-controls">
+      <label>Lekcja
+        <select id="lessonSelect"></select>
+      </label>
+      <label>Tempo
+        <input id="tempoInput" type="range" min="50" max="150" value="76" step="1">
+        <span id="tempoLabel">76 BPM</span>
+      </label>
+      <div class="stat"><span>Następna</span><b id="nextNote">--</b></div>
+      <div class="stat"><span>Wynik</span><b id="score">0</b></div>
+      <div class="stat"><span>Combo</span><b id="combo">0</b></div>
+      <div class="stat"><span>Trafione</span><b id="hits">0 / 0</b></div>
+      <div id="midiStatus" class="midi-status">MIDI: niepołączone</div>
+    </section>
+
+    <section class="trainer-stage-wrap">
+      <div id="stage" class="stage">
+        <div id="laneLayer" class="lane-layer"></div>
+        <div id="noteLayer" class="note-layer"></div>
+        <div class="hit-line"><span>GRAJ</span></div>
+      </div>
+      <div class="keyboard-shell">
+        <div id="keyboard" class="keyboard"></div>
+      </div>
+    </section>
+
+    <footer class="trainer-footer">
+      <span id="status">gotowy</span>
+    </footer>
+  </main>
+  <script src="assets/trainer.js"></script>
+</body>
+</html>
