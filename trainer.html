@@ -11,7 +11,7 @@
   <main class="trainer-app">
     <header class="trainer-top">
       <a href="index.html" class="back-link">Looper</a>
-      <h1>Trener MIDI <span>C3-G5</span></h1>
+      <h1>Trener MIDI <span id="rangeTitle">C3-G5</span></h1>
       <div class="top-actions">
         <button id="audioBtn" class="primary">Audio</button>
         <button id="midiBtn">MIDI</button>
@@ -29,6 +29,14 @@
         <input id="tempoInput" type="range" min="50" max="150" value="76" step="1">
         <span id="tempoLabel">76 BPM</span>
       </label>
+      <div class="octave-control">
+        <span>Zakres</span>
+        <b id="rangeLabel">C3-G5</b>
+        <div class="octave-buttons">
+          <button id="octaveDown">-</button>
+          <button id="octaveUp">+</button>
+        </div>
+      </div>
       <div class="stat"><span>Następna</span><b id="nextNote">--</b></div>
       <div class="stat"><span>Wynik</span><b id="score">0</b></div>
       <div class="stat"><span>Combo</span><b id="combo">0</b></div>
