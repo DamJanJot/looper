@@ -51,7 +51,51 @@
         <div class="hit-line"><span>GRAJ</span></div>
       </div>
       <div class="keyboard-shell">
-        <div id="keyboard" class="keyboard"></div>
+        <aside class="keystation-controls" aria-label="Panel Keystation Mini 32">
+          <div class="side-buttons" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="control-brand">
+            <span>KEYSTATION</span>
+            <b>MINI 32</b>
+          </div>
+          <div class="volume-stack">
+            <div class="usb-jack" aria-hidden="true"></div>
+            <div class="volume-knob" aria-hidden="true"></div>
+            <span>VOLUME</span>
+          </div>
+          <div class="pad-grid">
+            <button id="deviceSust" class="device-pad blue" type="button" aria-pressed="false" aria-label="Sustain">
+              <span class="pad-dot"></span>
+              <small>SUST</small>
+            </button>
+            <button id="deviceEdit" class="device-pad blue" type="button" aria-label="Edit">
+              <small>EDIT</small>
+            </button>
+            <button id="deviceOctDown" class="device-pad red" type="button" aria-label="Octave down">
+              <b>-</b>
+            </button>
+            <button id="deviceOctUp" class="device-pad red" type="button" aria-label="Octave up">
+              <b>+</b>
+            </button>
+          </div>
+          <div class="oct-data-label">OCT/DATA</div>
+          <div class="pitch-row">
+            <button class="soft-pad" type="button" data-hold-pad><span>&lt;PB</span></button>
+            <button class="soft-pad" type="button" data-hold-pad><span>MOD</span></button>
+            <button class="soft-pad" type="button" data-hold-pad><span>PB&gt;</span></button>
+          </div>
+        </aside>
+        <div class="keybed">
+          <div class="keybed-rail">
+            <span class="rail-title">KEYSTATION MINI 32</span>
+            <span id="railRange" class="rail-range">C3-G5</span>
+            <span class="rail-logo">M-AUDIO</span>
+          </div>
+          <div id="keyboard" class="keyboard"></div>
+        </div>
       </div>
     </section>
 
