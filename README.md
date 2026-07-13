@@ -12,6 +12,9 @@ The project originally started as a loop station and pad sequencer. Its current 
 
 ### MIDI Trainer
 
+
+ <a href="https://code-d.j.pl/looper/trainer.html">Link MIDI Trainer --></a> 
+
 The trainer is the primary learning experience in the project.
 
 - Full-screen practice interface inspired by rhythm games
