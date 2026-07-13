@@ -14,13 +14,6 @@ Wgraj katalog na serwer PHP i otwórz `index.php`.
 ## MIDI
 Web MIDI działa najlepiej w Chrome/Edge. Strona musi być uruchomiona przez HTTPS albo lokalnie (`localhost`). Podłącz klawiaturę USB, kliknij „Połącz MIDI” i wybierz tryb grania.
 
-## 5.0 MIDI Trainer
-- Dodano panel `Trener MIDI` z prostymi lekcjami na klawiaturę.
-- Nuty spadają w stylu Guitar Hero i trzeba grać je, gdy dochodzą do zielonej linii.
-- Trener liczy wynik, combo, trafienia i pudła.
-- Lekcje rozpoznają nazwę nuty niezależnie od oktawy, co lepiej pasuje do małych klawiatur MIDI.
-- `trainer.html` to osobna, pełnoekranowa strona ćwiczeń z klawiaturą na dole i przełączaniem zakresu oktawami.
-- `index.html` jest statyczną wersją do GitHub Pages; `index.php` zostaje dla hostingu PHP.
 
 ## Uwaga
 Próbki zapisane w kitach są kodowane do JSON, więc bardzo długie nagrania mogą robić duże pliki. Do padów najlepiej używać krótkich sampli.
@@ -35,3 +28,19 @@ Próbki zapisane w kitach są kodowane do JSON, więc bardzo długie nagrania mo
 
 
 <img width="1052" height="1749" alt="image" src="https://github.com/user-attachments/assets/95c068fc-3031-46d6-8cf3-75cfcda7278f" />
+
+
+# Trener MIDI
+
+## 5.0 MIDI Trainer
+- Dodano panel `Trener MIDI` z prostymi lekcjami na klawiaturę.
+- Nuty spadają w stylu Guitar Hero i trzeba grać je, gdy dochodzą do zielonej linii.
+- Trener liczy wynik, combo, trafienia i pudła.
+- Lekcje rozpoznają nazwę nuty niezależnie od oktawy, co lepiej pasuje do małych klawiatur MIDI.
+- `trainer.html` to osobna, pełnoekranowa strona ćwiczeń z klawiaturą na dole i przełączaniem zakresu oktawami.
+- `index.html` jest statyczną wersją do GitHub Pages; `index.php` zostaje dla hostingu PHP.
+
+<img width="1919" height="1049" alt="image" src="https://github.com/user-attachments/assets/568732e8-70a3-4f05-ad5b-b372bb71d87b" />
+
+
+
