@@ -32,16 +32,13 @@
       <div class="octave-control">
         <span>Zakres</span>
         <b id="rangeLabel">C3-G5</b>
-        <div class="octave-buttons">
-          <button id="octaveDown">-</button>
-          <button id="octaveUp">+</button>
-        </div>
+        <small>Sterowanie z MIDI</small>
       </div>
       <div class="stat"><span>Następna</span><b id="nextNote">--</b></div>
       <div class="stat"><span>Wynik</span><b id="score">0</b></div>
       <div class="stat"><span>Combo</span><b id="combo">0</b></div>
       <div class="stat"><span>Trafione</span><b id="hits">0 / 0</b></div>
-      <div id="midiStatus" class="midi-status">MIDI: niepołączone</div>
+      <div class="midi-status"><span id="midiStatus">MIDI: niepołączone</span><button id="midiSettings" type="button">Ustawienia MIDI</button></div>
     </section>
 
     <section class="trainer-stage-wrap">
@@ -52,10 +49,8 @@
       </div>
       <div class="keyboard-shell">
         <aside class="keystation-controls" aria-label="Panel Keystation Mini 32">
-          <div class="side-buttons" aria-hidden="true">
-            <span></span>
-            <span></span>
-            <span></span>
+          <div class="side-buttons">
+            <button id="deviceRecord" type="button" class="record-indicator" disabled aria-label="Nagrywanie MIDI">REC</button>
           </div>
           <div class="control-brand">
             <span>KEYSTATION</span>
@@ -67,25 +62,25 @@
             <span>VOLUME</span>
           </div>
           <div class="pad-grid">
-            <button id="deviceSust" class="device-pad blue" type="button" aria-pressed="false" aria-label="Sustain">
+            <button id="deviceSust" class="device-pad blue" type="button" disabled aria-pressed="false" aria-label="Sustain">
               <span class="pad-dot"></span>
               <small>SUST</small>
             </button>
-            <button id="deviceEdit" class="device-pad blue" type="button" aria-label="Edit">
+            <button id="deviceEdit" class="device-pad blue" type="button" disabled aria-pressed="false" aria-label="Edit">
               <small>EDIT</small>
             </button>
-            <button id="deviceOctDown" class="device-pad red" type="button" aria-label="Octave down">
+            <button id="deviceOctDown" class="device-pad red" type="button" disabled aria-pressed="false" aria-label="Octave down">
               <b>-</b>
             </button>
-            <button id="deviceOctUp" class="device-pad red" type="button" aria-label="Octave up">
+            <button id="deviceOctUp" class="device-pad red" type="button" disabled aria-pressed="false" aria-label="Octave up">
               <b>+</b>
             </button>
           </div>
           <div class="oct-data-label">OCT/DATA</div>
           <div class="pitch-row">
-            <button class="soft-pad" type="button" data-hold-pad><span>&lt;PB</span></button>
-            <button class="soft-pad" type="button" data-hold-pad><span>MOD</span></button>
-            <button class="soft-pad" type="button" data-hold-pad><span>PB&gt;</span></button>
+            <button id="devicePitchDown" class="soft-pad" type="button" disabled><span>&lt;PB</span></button>
+            <button id="deviceMod" class="soft-pad" type="button" disabled><span>MOD</span></button>
+            <button id="devicePitchUp" class="soft-pad" type="button" disabled><span>PB&gt;</span></button>
           </div>
         </aside>
         <div class="keybed">
@@ -103,6 +98,26 @@
       <span id="status">gotowy</span>
     </footer>
   </main>
+  <dialog id="midiDialog">
+    <h2>Sterowanie fizycznym kontrolerem</h2>
+    <p>Panel na stronie pokazuje stan odebrany z MIDI. Sustain (CC64), głośność (CC7), modulacja (CC1) i pitch bend są rozpoznawane automatycznie.</p>
+    <p>Keystation Mini 32 zmienia oktawę i tryb Edit wewnętrznie. Nie wysyła osobnego komunikatu o tych przyciskach ani ich diodach. Po zmianie oktawy wybierz kalibrację i naciśnij skrajny lewy klawisz C. Zakres i kolory na stronie dopasują się do tej nuty.</p>
+    <button id="calibrateMidi" type="button">Kalibruj: następnie zagraj lewe C</button>
+    <p>Jeśli przycisk kontrolera wysyła CC lub Program Change, możesz przypisać go do akcji. Wybierz akcję, kliknij „Przypisz” i naciśnij przycisk sprzętowy. Przypisania są zapamiętywane dla danego wejścia MIDI. Wewnętrzny przycisk Edit nie da się w ten sposób przypisać.</p>
+    <label>Akcja <select id="midiAction"><option value="octaveDown">Oktawa −</option><option value="octaveUp">Oktawa +</option><option value="record">Nagrywanie MIDI wł./wył.</option><option value="edit">Edytor nagrania otwórz/zapisz</option></select></label>
+    <button id="learnMidi" type="button">Przypisz</button>
+    <button id="clearMidiMapping" type="button">Usuń przypisanie</button>
+    <p id="mappingStatus" role="status"></p>
+    <p id="lastMidi" role="status">Oczekiwanie na komunikat MIDI.</p>
+    <button id="closeMidiSettings" type="button">Zamknij</button>
+  </dialog>
+  <dialog id="editDialog">
+    <h2>Edycja nagrania MIDI</h2>
+    <label>Numery nut MIDI (24–103), oddzielone spacjami
+      <textarea id="recordedNotes" rows="5"></textarea>
+    </label>
+    <p id="editStatus" role="status">Zmień nuty i ponownie naciśnij przypisany przycisk Edit na kontrolerze, aby zapisać. Escape anuluje.</p>
+  </dialog>
   <script src="assets/trainer.js"></script>
 </body>
 </html>

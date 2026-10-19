@@ -160,6 +160,21 @@ Web MIDI works best in Chromium-based browsers such as Chrome or Edge.
 
 The interface was designed around the 32-key range of the **M-Audio Keystation Mini 32**, but other class-compliant MIDI controllers should also work.
 
+## Trainer hardware controls
+
+- Falling-note lanes track the actual piano position and width, including responsive layouts. The lower edge of a note reaches the play line at its scheduled hit time.
+- The side panel only displays received MIDI state. Clicking its octave, REC, Edit, sustain, PB or MOD indicators does nothing. The separate on-screen octave buttons have been removed.
+- Sustain (CC64) and volume (CC7) are supported. Modulation (CC1) and pitch bend update their indicators; they do not yet alter the trainer synthesizer sound.
+- Open **Ustawienia MIDI** to learn a physical CC or Program Change button for octave down/up, recording or editing. CC buttons activate at values of 64 or greater and re-arm below 64. Assignments are stored locally per MIDI input and channel; reconnecting with a different input identifier may require learning again. A learned action replaces the default trainer function of that message.
+- REC captures up to 2048 MIDI notes within the current range as a custom lesson at the selected tempo. It stores note order in localStorage, without audio, note durations or original timing. Starting REC again begins a new recording.
+- A learned physical Edit button opens the recorded-note editor. Press it again to save valid note numbers within the current range; Escape cancels.
+- **Keystation Mini 32 limitation:** default Octave and Edit buttons operate internally and do not send a separate click or LED-state message. Their state cannot reliably be inferred from arbitrary played notes. After changing the hardware octave, select **Kalibruj** and play the leftmost C (C1 through C5 supported). The page adjusts its range and keeps the corresponding octave indicator green. It does not send LED commands to the device. Learning requires a control that actually sends CC or Program Change; the internal Edit button cannot be learned this way.
+- Incoming MIDI notes are never transposed a second time. Learned octave controls change the displayed and lesson range.
+
+Hardware reference: [M-Audio Keystation Mini 32 MK3 User Guide](https://cdn.inmusicbrands.com/m-audio/maudio_documentation/KeystationMini32MK3-UserGuide-v1.0.pdf).
+
+Local regression checks: run `node tests/trainer-midi.test.cjs`. These simulate MIDI and do not verify a connected USB controller.
+
 ## Project structure
 
 ```text

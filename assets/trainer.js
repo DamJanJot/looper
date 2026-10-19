@@ -20,6 +20,17 @@ let master;
 let midiAccess;
 let octaveShift = 0;
 let sustainOn = false;
+let calibrating = false;
+let learningAction = null;
+let recording = false;
+let recorded = [];
+let mappings = {};
+try {
+  const saved = JSON.parse(localStorage.getItem('trainer-midi-mappings') || '{}');
+  if (saved && typeof saved === 'object' && !Array.isArray(saved)) mappings = saved;
+} catch {}
+const controllerValues = new Map();
+const connectedInputs = new Map();
 let noteLayout = new Map();
 const deviceTimers = new Map();
 const state = {
@@ -179,6 +190,7 @@ function renderBoard() {
   $('rangeLabel').textContent = rangeText();
   $('rangeTitle').textContent = rangeText();
   $('railRange').textContent = rangeText();
+  updateOctaveIndicators();
 
   for (let i = 0; i < COUNT; i++) {
     const note = base + i;
@@ -207,6 +219,32 @@ function renderBoard() {
     key.onpointerleave = () => handleNoteOff(note);
     keys.appendChild(key);
   }
+}
+
+// Both layers use the actual keyboard content box, including responsive panel changes.
+function alignStage() {
+  const stage = $('stage').getBoundingClientRect();
+  const keyboard = $('keyboard').getBoundingClientRect();
+  const left = keyboard.left - stage.left - $('stage').clientLeft;
+  for (const id of ['laneLayer', 'noteLayer']) {
+    $(id).style.left = left + 'px';
+    $(id).style.width = keyboard.width + 'px';
+    $(id).style.right = 'auto';
+  }
+  const line = document.querySelector('.hit-line');
+  line.style.left = left + 'px';
+  line.style.width = keyboard.width + 'px';
+  line.style.right = 'auto';
+}
+
+function setIndicator(id, active) {
+  $(id).classList.toggle('is-locked', active);
+  $(id).setAttribute('aria-pressed', String(active));
+}
+
+function updateOctaveIndicators() {
+  setIndicator('deviceOctDown', octaveShift < 0);
+  setIndicator('deviceOctUp', octaveShift > 0);
 }
 
 function buildEvents() {
@@ -271,8 +309,8 @@ function pulseDevice(id, ms = 210) {
   deviceTimers.set(id, setTimeout(() => el.classList.remove('is-pressed'), ms));
 }
 
-function toggleSustain() {
-  sustainOn = !sustainOn;
+function setSustain(active) {
+  sustainOn = active;
   const el = $('deviceSust');
   if (el) {
     el.classList.toggle('is-locked', sustainOn);
@@ -297,6 +335,7 @@ function shiftOctave(delta) {
 }
 
 function start() {
+  if (recording) return;
   initAudio();
   stop(false);
   resetStats();
@@ -308,8 +347,8 @@ function start() {
 }
 
 function preview() {
+  if (recording) return;
   initAudio();
-  pulseDevice('deviceEdit');
   stop(false);
   resetStats();
   setupNotes();
@@ -332,7 +371,11 @@ function flashKey(note, cls = 'down', ms = 180) {
   setTimeout(() => key.classList.remove(cls), ms);
 }
 
-function handleNoteOn(note, vel = 1) {
+function handleNoteOn(note, vel = 1, fromMidi = false) {
+  if (fromMidi && recording && inRange(note) && recorded.length < 2048) {
+    recorded.push(note);
+    status('nagrywanie MIDI: ' + recorded.length + ' nut');
+  }
   initAudio();
   playTone(note, vel);
   if (!inRange(note)) {
@@ -378,7 +421,8 @@ function loop() {
   if (state.mode === 'idle') return;
   const stage = $('stage');
   const elapsed = performance.now() - state.start;
-  const hitY = stage.clientHeight - 45;
+  const noteHeight = state.events[0]?.el?.offsetHeight || 40;
+  const hitY = stage.clientHeight - 5 - noteHeight;
   let changed = false;
 
   state.events.forEach(ev => {
@@ -415,32 +459,156 @@ function loop() {
   state.raf = requestAnimationFrame(loop);
 }
 
-async function connectMidi() {
-  initAudio();
-  if (!navigator.requestMIDIAccess) {
-    $('midiStatus').textContent = 'MIDI: brak Web MIDI';
-    return;
-  }
-  midiAccess = await navigator.requestMIDIAccess();
+function updateMidiInputs() {
   const names = [];
   for (const input of midiAccess.inputs.values()) {
+    if (input.state === 'disconnected') continue;
     names.push(input.name);
-    input.onmidimessage = e => {
-      const [cmd, note, vel] = e.data;
-      const type = cmd & 240;
-      if (type === 144 && vel > 0) handleNoteOn(note, vel / 127);
-      else if (type === 128 || (type === 144 && vel === 0)) handleNoteOff(note);
-    };
+    connectedInputs.set(input.id, input);
+    input.onmidimessage = e => receiveMidi(e.data, input.id);
+  }
+  for (const [id, input] of connectedInputs) {
+    if (input.state === 'disconnected' || !midiAccess.inputs.has(id)) {
+      input.onmidimessage = null;
+      connectedInputs.delete(id);
+      for (const key of controllerValues.keys()) if (key.startsWith(id + ':')) controllerValues.delete(key);
+      document.querySelectorAll('.key.down').forEach(key => key.classList.remove('down'));
+      setSustain(false);
+      ['devicePitchDown', 'devicePitchUp', 'deviceMod'].forEach(id => setIndicator(id, false));
+      if (recording) toggleRecording();
+    }
   }
   $('midiStatus').textContent = 'MIDI: ' + (names.join(', ') || 'brak wejść');
 }
 
-function bindHoldPads() {
-  document.querySelectorAll('[data-hold-pad]').forEach(pad => {
-    pad.addEventListener('pointerdown', () => pad.classList.add('is-pressed'));
-    pad.addEventListener('pointerup', () => pad.classList.remove('is-pressed'));
-    pad.addEventListener('pointerleave', () => pad.classList.remove('is-pressed'));
-  });
+async function connectMidi() {
+  initAudio();
+  if (!navigator.requestMIDIAccess) {
+    $('midiStatus').textContent = 'MIDI: brak Web MIDI (wymagany HTTPS lub localhost)';
+    return;
+  }
+  try {
+    midiAccess = midiAccess || await navigator.requestMIDIAccess();
+    midiAccess.onstatechange = updateMidiInputs;
+    updateMidiInputs();
+  } catch {
+    $('midiStatus').textContent = 'MIDI: brak dostępu — sprawdź uprawnienia przeglądarki';
+  }
+}
+
+function saveRecording() {
+  if (!recorded.length) return;
+  const lesson = {id: 'recorded', name: 'Moje nagranie MIDI (' + recorded.length + ' nut)', bpm: tempo(), notes: recorded.map(note => note - octaveShift * 12)};
+  const index = LESSONS.findIndex(item => item.id === lesson.id);
+  if (index < 0) {
+    LESSONS.push(lesson);
+    const option = document.createElement('option');
+    option.value = lesson.id;
+    $('lessonSelect').appendChild(option);
+  } else LESSONS[index] = lesson;
+  const option = [...$('lessonSelect').options].find(item => item.value === lesson.id);
+  option.textContent = lesson.name;
+  $('lessonSelect').value = lesson.id;
+  try { localStorage.setItem('trainer-recorded-notes', JSON.stringify(recorded)); } catch {}
+  setupNotes();
+}
+
+function toggleRecording() {
+  if ($('editDialog').open) return;
+  stop(false);
+  recording = !recording;
+  setIndicator('deviceRecord', recording);
+  if (recording) {
+    recorded = [];
+    status('nagrywanie MIDI — zagraj nuty; ten sam przycisk kończy nagranie');
+  } else {
+    saveRecording();
+    status(recorded.length ? 'zapisano nuty jako lekcję w wybranym tempie' : 'nagranie puste');
+  }
+}
+
+function editRecording() {
+  if (recording) toggleRecording();
+  const dialog = $('editDialog');
+  if (dialog.open) {
+    const value = $('recordedNotes').value.trim();
+    const tokens = value ? value.split(/[\s,;]+/) : [];
+    const notes = tokens.map(Number);
+    if (!notes.length || notes.length > 2048 || notes.some(note => !Number.isInteger(note) || !inRange(note))) {
+      $('editStatus').textContent = 'Wpisz od 1 do 2048 numerów nut w aktualnym zakresie ' + rangeText() + '.';
+      return;
+    }
+    recorded = notes;
+    saveRecording();
+    dialog.close();
+    status('zapisano edycję nagrania');
+  } else {
+    stop(false);
+    if ($('midiDialog').open) $('midiDialog').close();
+    $('recordedNotes').value = recorded.join(' ');
+    $('editStatus').textContent = 'Zapisz ponownym naciśnięciem Edit na kontrolerze. Escape anuluje. Zakres: ' + rangeText();
+    dialog.showModal();
+  }
+  setIndicator('deviceEdit', dialog.open);
+}
+
+function showMapping() {
+  const action = $('midiAction').value;
+  const assigned = Object.entries(mappings).filter(([, value]) => value === action).map(([key]) => key);
+  $('mappingStatus').textContent = assigned.length ? 'Przypisano: ' + assigned.join(', ') : 'Brak przypisania dla tej akcji.';
+}
+
+function receiveMidi(data, inputId) {
+  const [cmd, note, vel = 0] = data;
+  const type = cmd & 240;
+  $('lastMidi').textContent = 'MIDI: ' + Array.from(data).join(' ');
+  const control = type === 176 || type === 192;
+  const key = inputId + ':' + cmd + ':' + note;
+  const pressed = type === 192 || vel >= 64;
+  const wasPressed = controllerValues.get(key) || false;
+  if (control) controllerValues.set(key, pressed);
+  if (control && learningAction && pressed && (!wasPressed || type === 192)) {
+    // One controller per action; one action per controller.
+    for (const old of Object.keys(mappings)) if (mappings[old] === learningAction) delete mappings[old];
+    mappings[key] = learningAction;
+    learningAction = null;
+    try { localStorage.setItem('trainer-midi-mappings', JSON.stringify(mappings)); } catch {}
+    showMapping();
+    return;
+  }
+  if (control && mappings[key]) {
+    // CC releases re-arm a button; repeated high values do not repeat actions.
+    if (pressed && (!wasPressed || type === 192)) {
+      const action = mappings[key];
+      if (action === 'record') toggleRecording();
+      else if (action === 'edit') editRecording();
+      else if (['octaveDown', 'octaveUp'].includes(action) && !recording && !$('editDialog').open) shiftOctave(action === 'octaveDown' ? -1 : 1);
+    }
+    return;
+  }
+  if (type === 144 && vel > 0 && calibrating) {
+    const shift = (note - HOME_BASE) / 12;
+    if (!Number.isInteger(shift) || shift < MIN_SHIFT || shift > MAX_SHIFT) {
+      status('kalibracja: naciśnij skrajny lewy klawisz C (C1–C5)');
+      return;
+    }
+    calibrating = false;
+    shiftOctave(shift - octaveShift);
+    status('zakres zsynchronizowany: ' + rangeText());
+    return;
+  }
+  if (type === 144 && vel > 0) handleNoteOn(note, vel / 127, true);
+  else if (type === 128 || (type === 144 && vel === 0)) handleNoteOff(note);
+  else if (type === 176 && note === 64) setSustain(vel >= 64);
+  else if (type === 176 && note === 7) {
+    if (master) master.gain.value = vel / 127 * .75;
+    document.querySelector('.volume-knob').style.setProperty('--knob-angle', (-135 + vel / 127 * 270) + 'deg');
+  } else if (type === 176 && note === 1) setIndicator('deviceMod', vel > 0);
+  else if (type === 224) {
+    const bend = (vel << 7) + note - 8192;
+    setIndicator('devicePitchDown', bend < -128);
+    setIndicator('devicePitchUp', bend > 128);
+  }
 }
 
 function bind() {
@@ -449,12 +617,29 @@ function bind() {
   $('startBtn').onclick = start;
   $('stopBtn').onclick = () => stop();
   $('previewBtn').onclick = preview;
-  $('octaveDown').onclick = () => shiftOctave(-1);
-  $('octaveUp').onclick = () => shiftOctave(1);
-  $('deviceOctDown').onclick = () => shiftOctave(-1);
-  $('deviceOctUp').onclick = () => shiftOctave(1);
-  $('deviceSust').onclick = toggleSustain;
-  $('deviceEdit').onclick = preview;
+  $('midiSettings').onclick = () => { showMapping(); $('midiDialog').showModal(); };
+  $('closeMidiSettings').onclick = () => $('midiDialog').close();
+  $('midiDialog').addEventListener('close', () => { learningAction = null; });
+  $('editDialog').addEventListener('close', () => setIndicator('deviceEdit', false));
+  $('calibrateMidi').onclick = () => {
+    if (recording || $('editDialog').open) return;
+    learningAction = null;
+    calibrating = true;
+    $('midiDialog').close();
+    status('kalibracja: naciśnij skrajny lewy klawisz C na kontrolerze');
+  };
+  $('midiAction').onchange = () => { learningAction = null; showMapping(); };
+  $('learnMidi').onclick = () => {
+    calibrating = false;
+    learningAction = $('midiAction').value;
+    $('mappingStatus').textContent = 'Naciśnij przycisk kontrolera wysyłający CC / Program Change…';
+  };
+  $('clearMidiMapping').onclick = () => {
+    learningAction = null;
+    for (const key of Object.keys(mappings)) if (mappings[key] === $('midiAction').value) delete mappings[key];
+    try { localStorage.setItem('trainer-midi-mappings', JSON.stringify(mappings)); } catch {}
+    showMapping();
+  };
   $('lessonSelect').onchange = () => {
     stop(false);
     $('tempoInput').value = selectedLesson().bpm;
@@ -474,11 +659,28 @@ function bind() {
     const key = [...document.querySelectorAll('.key')].find(k => k.dataset.hotkey === e.key.toLowerCase());
     if (key) handleNoteOff(+key.dataset.note);
   });
-  bindHoldPads();
 }
 
 renderLessons();
 renderBoard();
+try {
+  const saved = JSON.parse(localStorage.getItem('trainer-recorded-notes') || '[]');
+  if (Array.isArray(saved) && saved.length && saved.length <= 2048 && saved.every(note => Number.isInteger(note) && note >= 24 && note <= 103)) {
+    const shift = Array.from({length: MAX_SHIFT - MIN_SHIFT + 1}, (_, i) => i + MIN_SHIFT)
+      .find(shift => saved.every(note => note >= HOME_BASE + shift * 12 && note < HOME_BASE + shift * 12 + COUNT));
+    if (shift !== undefined) {
+      octaveShift = shift;
+      recorded = saved;
+      renderBoard();
+      saveRecording();
+    }
+  }
+} catch {}
 setupNotes();
 bind();
+const boardObserver = new ResizeObserver(alignStage);
+boardObserver.observe($('keyboard'));
+boardObserver.observe($('stage'));
+window.addEventListener('resize', alignStage);
+alignStage();
 })();

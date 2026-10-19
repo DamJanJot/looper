@@ -184,7 +184,12 @@ button.primary {
   align-items: center;
   color: var(--muted);
   font-size: 13px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
+
+.midi-status button { padding: 5px 8px; font-size: 11px; }
+.octave-control small { color: var(--muted); font-size: 10px; }
 
 .trainer-stage-wrap {
   min-height: 0;
@@ -266,7 +271,7 @@ button.primary {
   position: absolute;
   opacity: 0;
   height: 40px;
-  min-width: 18px;
+  min-width: 0;
   border-radius: 8px;
   background: linear-gradient(180deg, #ffe27b, #ffb800);
   color: #171000;
@@ -400,7 +405,8 @@ button.primary {
   top: 7px;
   width: 3px;
   height: 12px;
-  transform: translateX(-50%);
+  transform: translateX(-50%) rotate(var(--knob-angle, 0deg));
+  transform-origin: 50% 12px;
   border-radius: 999px;
   background: #6c7280;
 }
@@ -442,6 +448,39 @@ button.primary {
   --pad: var(--red);
   --pad-rgb: 255, 21, 80;
 }
+
+.device-pad.red.is-locked {
+  --pad: var(--green);
+  --pad-rgb: 34, 212, 155;
+}
+
+.keystation-controls button:disabled { cursor: default; opacity: 1; }
+.record-indicator {
+  padding: 5px 2px;
+  font-size: 8px;
+  color: var(--muted);
+  background: #101116;
+}
+.record-indicator.is-locked { color: #fff; background: #b3143d; border-color: var(--red); box-shadow: 0 0 14px var(--red); }
+.soft-pad.is-locked { color: var(--blue); border-color: var(--blue); }
+
+dialog {
+  width: min(640px, calc(100% - 24px));
+  max-height: 85svh;
+  overflow: auto;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 24px;
+  line-height: 1.5;
+}
+dialog::backdrop { background: #000a; }
+dialog h2 { margin-top: 0; font-size: 20px; }
+dialog p { color: var(--muted); font-size: 14px; }
+dialog select, dialog textarea { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+dialog textarea { width: 100%; margin-top: 8px; }
+#lastMidi, #mappingStatus { overflow-wrap: anywhere; }
 
 .device-pad b {
   font-size: 28px;
