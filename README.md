@@ -31,6 +31,9 @@ The trainer is the primary learning experience in the project.
 
 Open `trainer.html` to launch the dedicated trainer interface.
 
+<img width="1919" height="913" alt="Zrzut ekranu 2026-10-20 000821" src="https://github.com/user-attachments/assets/2e31dc57-5412-41a8-bf9c-5f7e1e756cda" />
+
+
 ### Live MIDI Keyboard
 
 The main workstation includes a playable 32-key virtual piano that mirrors notes received from a physical MIDI controller.
