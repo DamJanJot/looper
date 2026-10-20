@@ -1,6 +1,8 @@
 (()=>{
 const $=id=>document.getElementById(id), status=m=>$('status').textContent=m;
-let ctx, master, filter, delay, fb, delayWet, convolver, revWet, drive, crush, playing=false, step=0, timer, mediaRecorder, chunks=[], currentBlob, currentBuffer, selectedPad=0, learnPad=null;
+let ctx, master, filter, delay, fb, delayWet, convolver, revWet, drive, crush, limiter, sequenceBus, voiceOutput, nextStepTime=0, playing=false, step=0, timer, mediaRecorder, chunks=[], currentBlob, currentBuffer, selectedPad=0, learnPad=null;
+const beatVisualTimers=new Set();
+let currentBeatName='';
 const padsEl=$('pads'), seqEl=$('sequencer'), loopsEl=$('loops'), wave=$('wave'), wc=wave.getContext('2d');
 const keyDefaults=['a','w','s','e','d','f','t','g','y','h','u','j','k','o','l','p'];
 const SOUND_BANK=[
@@ -27,16 +29,17 @@ const whiteNames=['C','D','E','F','G','A','B'];
 
 let pads=Array.from({length:16},(_,i)=>({name:SOUND_BANK[i%SOUND_BANK.length][1],sound:SOUND_BANK[i%SOUND_BANK.length][0],key:keyDefaults[i],buffer:null,gain:.9,pitch:1}));
 const sequence=Array.from({length:16},()=>Array(32).fill(false)), loops=[];
-const presets={'Neon House':{bpm:124,swing:.08,p:{0:[0,4,8,12],3:[4,12],6:[2,6,10,14],15:[7,15]}},'Trap 808':{bpm:140,swing:.16,p:{0:[0,6,10,14],3:[4,12],6:[2,5,8,11,14],12:[0,3,7,11,12]}},'Electro Funk':{bpm:112,swing:.18,p:{1:[0,7,10],4:[4,12],6:[2,6,10,14],8:[3,11],15:[5,13]}},'Ambient Glitch':{bpm:88,swing:.03,p:{17:[0,8],22:[3,7,12],26:[2,6,11,15],19:[5,13]}}};
-function initAudio(){ if(ctx) return; ctx=new (window.AudioContext||window.webkitAudioContext)(); master=ctx.createGain(); filter=ctx.createBiquadFilter(); delay=ctx.createDelay(1); fb=ctx.createGain(); delayWet=ctx.createGain(); convolver=ctx.createConvolver(); revWet=ctx.createGain(); drive=ctx.createWaveShaper(); crush=ctx.createWaveShaper(); buildReverb(); updateFx(); master.connect(drive); drive.connect(crush); crush.connect(filter); filter.connect(ctx.destination); master.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(delayWet); delayWet.connect(filter); master.connect(convolver); convolver.connect(revWet); revWet.connect(filter); status('audio uruchomione'); }
+const presets=LooperBeats.presets;
+function initAudio(){ if(ctx){if(ctx.state==='suspended')ctx.resume();return;} ctx=new (window.AudioContext||window.webkitAudioContext)(); master=ctx.createGain(); filter=ctx.createBiquadFilter(); delay=ctx.createDelay(1); fb=ctx.createGain(); delayWet=ctx.createGain(); convolver=ctx.createConvolver(); revWet=ctx.createGain(); drive=ctx.createWaveShaper(); crush=ctx.createWaveShaper(); limiter=ctx.createDynamicsCompressor();limiter.threshold.value=-6;limiter.knee.value=8;limiter.ratio.value=8;limiter.attack.value=.003;limiter.release.value=.15; buildReverb(); updateFx(); master.connect(drive); drive.connect(crush); crush.connect(filter); filter.connect(limiter);limiter.connect(ctx.destination); master.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(delayWet); delayWet.connect(filter); master.connect(convolver); convolver.connect(revWet); revWet.connect(filter); status('audio uruchomione'); }
 function gainNode(v){const g=ctx.createGain(); g.gain.value=v; return g}
-function curve(a){const k=a*700,n=44100,c=new Float32Array(n); for(let i=0;i<n;i++){let x=i*2/n-1;c[i]=(1+k)*x/(1+k*Math.abs(x))}return c}
+function curve(a){const k=a*20,n=44100,c=new Float32Array(n); for(let i=0;i<n;i++){let x=i*2/n-1;c[i]=(1+k)*x/(1+k*Math.abs(x))}return c}
 function crushCurve(a){const n=44100,c=new Float32Array(n),bits=Math.max(3,16-Math.floor(a*13)),st=2/2**bits; for(let i=0;i<n;i++){let x=i*2/n-1;c[i]=Math.round(x/st)*st}return c}
 function buildReverb(){if(!ctx)return; const len=ctx.sampleRate*2.6|0,b=ctx.createBuffer(2,len,ctx.sampleRate); for(let ch=0;ch<2;ch++){let d=b.getChannelData(ch); for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*(1-i/len)**2.1} convolver.buffer=b}
-function updateFx(){if(!ctx)return; master.gain.value=+$('masterVol').value; filter.type=$('filterType').value; filter.frequency.value=+$('cutoff').value; filter.Q.value=+$('resonance').value; delay.delayTime.value=+$('delayTime').value; fb.gain.value=+$('feedback').value; delayWet.gain.value=+$('delayMix').value; revWet.gain.value=+$('reverbMix').value; drive.curve=curve(+$('drive').value); crush.curve=crushCurve(+$('crush').value)}
-function osc(type,f,dur,t,vol=.6,dest=master){let o=ctx.createOscillator(),g=gainNode(vol); o.type=type;o.frequency.setValueAtTime(f,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);o.connect(g).connect(dest);o.start(t);o.stop(t+dur)}
-function noise(dur,t,hp=1200,vol=.35){let b=ctx.createBuffer(1,ctx.sampleRate*dur,ctx.sampleRate),d=b.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; let s=ctx.createBufferSource(),f=ctx.createBiquadFilter(),g=gainNode(vol); f.type='highpass';f.frequency.value=hp;g.gain.exponentialRampToValueAtTime(.001,t+dur);s.buffer=b;s.connect(f).connect(g).connect(master);s.start(t)}
+function updateFx(){if(!ctx)return; master.gain.value=+$('masterVol').value; filter.type=$('filterType').value; filter.frequency.value=+$('cutoff').value; filter.Q.value=+$('resonance').value; delay.delayTime.value=+$('delayTime').value; fb.gain.value=+$('feedback').value; delayWet.gain.value=+$('delayMix').value; revWet.gain.value=+$('reverbMix').value; drive.curve=+$('drive').value>0?curve(+$('drive').value):null; crush.curve=+$('crush').value>0?crushCurve(+$('crush').value):null}
+function osc(type,f,dur,t,vol=.6,dest=voiceOutput||master){let o=ctx.createOscillator(),g=gainNode(0); o.type=type;o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(Math.max(.001,vol),t+.002);g.gain.exponentialRampToValueAtTime(.001,t+dur);o.connect(g).connect(dest);o.start(t);o.stop(t+dur)}
+function noise(dur,t,hp=1200,vol=.35){let b=ctx.createBuffer(1,ctx.sampleRate*dur,ctx.sampleRate),d=b.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; let s=ctx.createBufferSource(),f=ctx.createBiquadFilter(),g=gainNode(0); f.type='highpass';f.frequency.value=hp;g.gain.setValueAtTime(Math.max(.001,vol),t);g.gain.exponentialRampToValueAtTime(.001,t+dur);s.buffer=b;s.connect(f).connect(g).connect(voiceOutput||master);s.start(t)}
 function playSound(id,t=ctx.currentTime,rate=1,gain=.9){
+ if(LooperBeats.renderSound(ctx,voiceOutput||master,id,t,rate,gain))return;
  if(id==='silence')return; const f= id.includes('bass')?50: id.includes('chord')?330: id.includes('pluck')?440: id.includes('arp')?520: 180;
  if(id==='kick-deep'){osc('sine',90,.07,t,gain);osc('sine',45,.35,t+.02,gain*.8)} else if(id==='kick-punch'){osc('triangle',120,.05,t,gain);osc('sine',55,.2,t,gain*.7)} else if(id==='kick-click'){osc('sine',70,.18,t,gain);noise(.025,t,8000,gain*.25)}
  else if(id.startsWith('snare')){noise(.18,t,id==='snare-crack'?1800:900,gain*.7);osc('triangle',190,.09,t,gain*.2)} else if(id==='clap-wide'){noise(.12,t,1200,gain*.7);setTimeout(()=>noise(.09,ctx.currentTime,1300,gain*.35),22)}
@@ -54,14 +57,26 @@ function playSound(id,t=ctx.currentTime,rate=1,gain=.9){
  else if(id==='fx-down'){for(let i=0;i<12;i++)osc('sawtooth',1200-i*85,.1,t+i*.045,gain*.09)} else if(id==='fx-noise-hit')noise(.28,t,1000,gain*.45); else if(id==='fx-wind')noise(1.1,t,260,gain*.12); else if(id==='glitch-2'){for(let i=0;i<8;i++)osc('square',200+Math.random()*1400,.025,t+i*.03,gain*.12)}
  else if(id==='vox-ah')osc('sine',620,.22,t,gain*.32); else if(id==='vox-chip')osc('square',760,.08,t,gain*.22)
 }
-function playPad(i,t=ctx.currentTime,vel=1){initAudio(); let p=pads[i]; if(p.buffer){let s=ctx.createBufferSource(),g=gainNode(p.gain*vel); s.buffer=p.buffer;s.playbackRate.value=p.pitch;s.connect(g).connect(master);s.start(t)} else playSound(p.sound,t,p.pitch,p.gain*vel); flash(i)}
+function playPad(i,t,vel=1,rate=1,destination){initAudio();t=t??ctx.currentTime;let p=pads[i],dest=destination||master;if(p.buffer){let s=ctx.createBufferSource(),g=gainNode(p.gain*vel);s.buffer=p.buffer;s.playbackRate.value=p.pitch*rate;s.connect(g).connect(dest);s.start(t)}else{voiceOutput=dest;try{playSound(p.sound,t,p.pitch*rate,p.gain*vel)}finally{voiceOutput=null}}if(!destination)flash(i)}
 function flash(i){let e=document.querySelector(`[data-pad="${i}"]`); if(e){e.classList.add('active');setTimeout(()=>e.classList.remove('active'),120)}}
 function drawPads(){padsEl.innerHTML=''; pads.forEach((p,i)=>{let b=document.createElement('div');b.className='pad';b.dataset.pad=i;b.innerHTML=`<b>${i+1}. ${p.name}</b><small>klawisz: ${p.key?.toUpperCase()||'brak'} ${p.buffer?'• sample':'• '+p.sound}</small><div><button>Play</button><button>Ucz klawisz</button></div>`;b.onclick=e=>{selectedPad=i;if(e.target.tagName!=='BUTTON')playPad(i)};b.querySelectorAll('button')[0].onclick=e=>{e.stopPropagation();selectedPad=i;playPad(i)};b.querySelectorAll('button')[1].onclick=e=>{e.stopPropagation();learnPad=i;status('naciśnij klawisz dla pada '+(i+1))};padsEl.appendChild(b)})}
-function drawSounds(){let q=($('soundSearch').value||'').toLowerCase();$('soundList').innerHTML=''; SOUND_BANK.filter(x=>(x[1]+x[2]+x[0]).toLowerCase().includes(q)).forEach(s=>{let d=document.createElement('button');d.className='sound';d.innerHTML=`<b>${s[1]}</b><small>${s[2]}</small>`;d.onclick=()=>{initAudio();pads[selectedPad].sound=s[0];pads[selectedPad].name=s[1];pads[selectedPad].buffer=null;playPad(selectedPad);drawPads();status('przypisano '+s[1]+' do pada '+(selectedPad+1))};$('soundList').appendChild(d)})}
-function drawSeq(){let steps=+$('steps').value; seqEl.style.setProperty('--steps',steps); seqEl.innerHTML=''; pads.forEach((p,r)=>{let row=document.createElement('div');row.className='seq-row';row.innerHTML=`<div class="track-name">${r+1}. ${p.name}</div>`;for(let c=0;c<steps;c++){let cell=document.createElement('div');cell.className='step'+(sequence[r][c]?' on':'');cell.onclick=()=>{sequence[r][c]=!sequence[r][c];cell.classList.toggle('on')};row.appendChild(cell)}seqEl.appendChild(row)})}
-function tick(){let steps=+$('steps').value,bpm=+$('bpm').value,sw=+$('swing').value;document.querySelectorAll('.playhead').forEach(x=>x.classList.remove('playhead'));document.querySelectorAll('.seq-row').forEach(r=>r.children[step+1]?.classList.add('playhead'));for(let r=0;r<16;r++)if(sequence[r][step])playPad(r);step=(step+1)%steps;let base=60000/bpm/4;timer=setTimeout(tick,base+(step%2?sw*base:0))}
-function play(){initAudio();if(playing)return;playing=true;step=0;loops.forEach(startLoop);tick();status('play')}
-function stop(){playing=false;clearTimeout(timer);loops.forEach(l=>{try{l.source?.stop()}catch(e){}l.source=null});status('stop')}
+function drawSounds(){let q=($('soundSearch').value||'').toLowerCase();$('soundList').innerHTML=''; SOUND_BANK.filter(x=>(x[1]+x[2]+x[0]).toLowerCase().includes(q)).forEach(s=>{let d=document.createElement('button');d.className='sound';d.innerHTML=`<b>${s[1]}</b><small>${s[2]}</small>`;d.onclick=()=>{initAudio();pads[selectedPad].sound=s[0];pads[selectedPad].name=s[1];pads[selectedPad].buffer=null;playPad(selectedPad);drawPads();drawSeq();markBeat('');status('przypisano '+s[1]+' do pada '+(selectedPad+1))};$('soundList').appendChild(d)})}
+function drawSeq(){let steps=+$('steps').value; seqEl.style.setProperty('--steps',steps); seqEl.innerHTML=''; pads.forEach((p,r)=>{let row=document.createElement('div');row.className='seq-row';row.innerHTML=`<div class="track-name">${r+1}. ${p.name}</div>`;for(let c=0;c<steps;c++){let cell=document.createElement('div');cell.className='step'+(sequence[r][c]?' on':'');cell.onclick=()=>{sequence[r][c]=!sequence[r][c];cell.classList.toggle('on');markBeat('')};row.appendChild(cell)}seqEl.appendChild(row)})}
+function tick(){
+ if(!playing)return;
+ const steps=+$('steps').value,bpm=Math.max(55,Math.min(220,+$('bpm').value||120)),sw=Math.max(0,Math.min(.45,+$('swing').value||0));
+ // Schedule sound on the audio clock. UI timers never determine note timing.
+ if(nextStepTime<ctx.currentTime-.12)nextStepTime=ctx.currentTime+.02;
+ while(nextStepTime<ctx.currentTime+.12){
+  const column=step,time=nextStepTime;
+  for(let r=0;r<16;r++){const hit=sequence[r][column];if(hit)playPad(r,time,hit.velocity??1,hit.rate??1,sequenceBus)}
+  const visual=setTimeout(()=>{beatVisualTimers.delete(visual);if(!playing)return;document.querySelectorAll('.playhead').forEach(x=>x.classList.remove('playhead'));document.querySelectorAll('.seq-row').forEach(row=>row.children[column+1]?.classList.add('playhead'));},Math.max(0,(time-ctx.currentTime)*1000));beatVisualTimers.add(visual);
+  nextStepTime+=LooperBeats.stepDuration(bpm,sw,column);step=(step+1)%steps;
+ }
+ timer=setTimeout(tick,25);
+}
+function play(){initAudio();if(playing)return;playing=true;step=0;sequenceBus=ctx.createGain();sequenceBus.gain.value=1;sequenceBus.connect(master);nextStepTime=ctx.currentTime+.04;loops.forEach(startLoop);tick();status('play')}
+function stop(){playing=false;clearTimeout(timer);beatVisualTimers.forEach(clearTimeout);beatVisualTimers.clear();if(sequenceBus){sequenceBus.gain.cancelScheduledValues(ctx.currentTime);sequenceBus.gain.setTargetAtTime(0,ctx.currentTime,.005);const oldBus=sequenceBus;setTimeout(()=>oldBus.disconnect(),100);sequenceBus=null}document.querySelectorAll('.playhead').forEach(x=>x.classList.remove('playhead'));loops.forEach(l=>{try{l.source?.stop()}catch(e){}l.source=null});status('stop')}
 async function record(){initAudio();if(mediaRecorder&&mediaRecorder.state==='recording'){mediaRecorder.stop();$('recBtn').textContent='● Nagraj';return}let stream=await navigator.mediaDevices.getUserMedia({audio:true});mediaRecorder=new MediaRecorder(stream);chunks=[];mediaRecorder.ondataavailable=e=>chunks.push(e.data);mediaRecorder.onstop=async()=>{currentBlob=new Blob(chunks,{type:'audio/webm'});currentBuffer=await ctx.decodeAudioData(await currentBlob.arrayBuffer());addLoop(currentBuffer,'Mic loop');drawWave(currentBuffer);status('nagrano')};mediaRecorder.start();$('recBtn').textContent='■ Stop rec';status('nagrywanie')}
 function addLoop(buffer,name){let l={name,buffer,gain:.8,rate:1,mute:false};loops.push(l);renderLoops();if(playing)startLoop(l)}
 function startLoop(l){if(l.mute)return;let s=ctx.createBufferSource(),g=gainNode(l.gain);s.buffer=l.buffer;s.loop=true;s.playbackRate.value=l.rate;s.connect(g).connect(master);s.start();l.source=s;l.g=g}
@@ -72,21 +87,69 @@ function normalize(b=currentBuffer){if(!b)return;let m=0;for(let ch=0;ch<b.numbe
 function reverse(){let b=edited();if(!b)return;for(let ch=0;ch<b.numberOfChannels;ch++)b.getChannelData(ch).reverse();currentBuffer=b;drawWave(b);addLoop(b,'Reverse edit')}
 function assignSample(){let b=edited();if(!b)return;let p=pads[selectedPad];p.buffer=b;p.name='Sample '+(selectedPad+1);p.pitch=+$('pitch').value;p.gain=+$('sampleGain').value;drawPads();drawSeq();status('sample przypisany do pada '+(selectedPad+1))}
 function chop(){let b=edited();if(!b)return;let slices=8,len=Math.floor(b.length/slices);for(let i=0;i<slices;i++){let out=ctx.createBuffer(b.numberOfChannels,len,b.sampleRate);for(let ch=0;ch<b.numberOfChannels;ch++)out.copyToChannel(b.getChannelData(ch).slice(i*len,(i+1)*len),ch);pads[8+i].buffer=out;pads[8+i].name='Chop '+(i+1)}drawPads();drawSeq();status('auto-chop na pady 9-16')}
-function applyPreset(n){let p=presets[n];if(!p)return;$('bpm').value=p.bpm;$('swing').value=p.swing;sequence.forEach(r=>r.fill(false));Object.entries(p.p).forEach(([r,cols])=>cols.forEach(c=>sequence[(+r)%16][c]=true));drawSeq()}
-function randomKit(){pads.forEach(p=>{let s=SOUND_BANK[Math.random()*SOUND_BANK.length|0];p.name=s[1];p.sound=s[0];p.buffer=null});sequence.forEach((r,ri)=>r.forEach((_,ci)=>r[ci]=Math.random()<(.08+(ri%4===2?.2:0))));drawPads();drawSeq();status('losowy kit')}
+function applyPreset(n){
+ const p=presets[n];if(!p)return;const resume=playing;if(resume)stop();
+ $('bpm').value=p.bpm;$('swing').value=p.swing;$('steps').value='32';$('presetSelect').value=n;
+ LooperBeats.kitFor(p).forEach((sound,i)=>{pads[i]={...pads[i],...sound,name:SOUND_BANK.find(entry=>entry[0]===sound.sound)?.[1]||sound.sound,buffer:null,pitch:1}});
+ sequence.forEach(row=>row.fill(false));
+ Object.entries(p.tracks).forEach(([row,hits])=>hits.forEach(value=>{const hit=typeof value==='number'?{step:value}:value;sequence[+row][hit.step]={velocity:hit.velocity??1,rate:2**((hit.semitones??0)/12)}}));
+ // Presets load a balanced, mostly dry mix instead of inheriting distortion.
+ Object.entries({masterVol:.72,filterType:'lowpass',cutoff:15000,resonance:.7,delayTime:.25,feedback:.2,delayMix:0,reverbMix:.035,drive:0,crush:0}).forEach(([id,value])=>$(id).value=value);
+ updateFx();drawPads();drawSeq();
+ markBeat(n);status('wczytano '+n);if(resume)play();
+}
+function markBeat(name){currentBeatName=presets[name]?name:'';document.querySelectorAll('[data-beat]').forEach(card=>card.classList.toggle('selected',card.dataset.beat===currentBeatName));$('beatNow').textContent=(currentBeatName||'Własny układ')+' · '+$('bpm').value+' BPM · '+(+$('steps').value/16)+' takt(y)'}
+function drawBeats(){
+ const list=$('beatLibrary');
+ Object.entries(presets).forEach(([name,preset])=>{const card=document.createElement('article');card.className='beat-card';card.dataset.beat=name;
+ const title=document.createElement('h3');title.textContent=name;
+ const meta=document.createElement('small');meta.textContent=preset.genre+' · '+preset.bpm+' BPM';
+ const description=document.createElement('p');description.textContent=preset.description;
+ const button=document.createElement('button');button.type='button';button.textContent='▶ Wczytaj i graj';button.setAttribute('aria-label','Wczytaj i graj: '+name);button.onclick=()=>{stop();applyPreset(name);play()};
+ card.append(title,meta,description,button);list.appendChild(card)});
+}
+function randomKit(){pads.forEach(p=>{let s=SOUND_BANK[Math.random()*SOUND_BANK.length|0];p.name=s[1];p.sound=s[0];p.buffer=null});sequence.forEach((r,ri)=>r.forEach((_,ci)=>r[ci]=Math.random()<(.08+(ri%4===2?.2:0))));drawPads();drawSeq();markBeat('');status('losowy kit')}
 async function bufToB64(b){if(!b)return null;let wav=bufferToWav(b);let ab=await wav.arrayBuffer();return btoa(String.fromCharCode(...new Uint8Array(ab)))}
 function b64ToBuf(b64){let bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return ctx.decodeAudioData(arr.buffer)}
 async function kitData(){return {pads:await Promise.all(pads.map(async p=>({...p,buffer:undefined,bufferB64:await bufToB64(p.buffer)})))}}
 async function saveKit(){initAudio();localStorage.setItem('neonKit',JSON.stringify(await kitData()));status('kit zapisany w przeglądarce')}
-async function loadKitObj(k){initAudio();for(let i=0;i<16;i++){pads[i]={...pads[i],...k.pads[i]};pads[i].buffer=k.pads[i].bufferB64?await b64ToBuf(k.pads[i].bufferB64):null}drawPads();drawSeq();status('kit wczytany')}
+async function loadKitObj(k){initAudio();for(let i=0;i<16;i++){pads[i]={...pads[i],...k.pads[i]};pads[i].buffer=k.pads[i].bufferB64?await b64ToBuf(k.pads[i].bufferB64):null}drawPads();drawSeq();markBeat('');status('kit wczytany')}
 async function loadKit(){let k=JSON.parse(localStorage.getItem('neonKit')||'null');if(k)loadKitObj(k);else status('brak zapisanego kitu')}
-async function saveProject(){let data={bpm:$('bpm').value,steps:$('steps').value,swing:$('swing').value,sequence,kit:await kitData()};localStorage.setItem('neonProject',JSON.stringify(data));fetch('save_project.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).catch(()=>{});status('projekt zapisany')}
-async function loadProject(){let d=JSON.parse(localStorage.getItem('neonProject')||'null');if(!d)return status('brak projektu');$('bpm').value=d.bpm;$('steps').value=d.steps;$('swing').value=d.swing;d.sequence.forEach((r,i)=>r.forEach((v,j)=>sequence[i][j]=v));if(d.kit)await loadKitObj(d.kit);drawSeq();status('projekt wczytany')}
+async function saveProject(){let data={beatName:currentBeatName,bpm:$('bpm').value,steps:$('steps').value,swing:$('swing').value,sequence,kit:await kitData()};localStorage.setItem('neonProject',JSON.stringify(data));fetch('save_project.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).catch(()=>{});status('projekt zapisany')}
+async function loadProject(){let d=JSON.parse(localStorage.getItem('neonProject')||'null');if(!d)return status('brak projektu');stop();$('bpm').value=d.bpm;$('steps').value=d.steps;$('swing').value=d.swing;d.sequence.forEach((r,i)=>r.forEach((v,j)=>sequence[i][j]=v));if(d.kit)await loadKitObj(d.kit);drawSeq();markBeat(d.beatName);status('projekt wczytany')}
 function downloadKit(){kitData().then(k=>downloadBlob(new Blob([JSON.stringify(k,null,2)],{type:'application/json'}),'neon-kit.json'))}
-function clearAll(){sequence.forEach(r=>r.fill(false));loops.length=0;renderLoops();drawSeq();status('wyczyszczono')}
+function clearAll(){stop();sequence.forEach(r=>r.fill(false));loops.length=0;renderLoops();drawSeq();markBeat('');status('wyczyszczono')}
 function bufferToWav(buffer){let len=buffer.length*4+44,view=new DataView(new ArrayBuffer(len)),p=0,w=s=>{for(let c of s)view.setUint8(p++,c.charCodeAt(0))};w('RIFF');view.setUint32(p,36+buffer.length*4,true);p+=4;w('WAVEfmt ');view.setUint32(p,16,true);p+=4;view.setUint16(p,1,true);p+=2;view.setUint16(p,2,true);p+=2;view.setUint32(p,buffer.sampleRate,true);p+=4;view.setUint32(p,buffer.sampleRate*4,true);p+=4;view.setUint16(p,4,true);p+=2;view.setUint16(p,16,true);p+=2;w('data');view.setUint32(p,buffer.length*4,true);p+=4;let L=buffer.getChannelData(0),R=buffer.numberOfChannels>1?buffer.getChannelData(1):L;for(let i=0;i<buffer.length;i++){[L[i],R[i]].forEach(v=>{v=Math.max(-1,Math.min(1,v));view.setInt16(p,v<0?v*0x8000:v*0x7fff,true);p+=2})}return new Blob([view],{type:'audio/wav'})}
 function downloadBlob(blob,name){let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click()}
-function exportWav(){initAudio();let sr=44100,dur=8,off=new OfflineAudioContext(2,sr*dur,sr);loops.forEach(l=>{let s=off.createBufferSource(),g=off.createGain();s.buffer=l.buffer;s.loop=true;s.playbackRate.value=l.rate;g.gain.value=l.gain;s.connect(g).connect(off.destination);s.start(0)});off.startRendering().then(b=>downloadBlob(bufferToWav(b),'neon-loop-mix.wav'))}
+async function exportWav(){
+ initAudio();const sr=ctx.sampleRate,steps=+$('steps').value,bpm=Math.max(55,Math.min(220,+$('bpm').value||120)),swing=+$('swing').value;
+ const duration=steps*60/bpm/4*2,off=new OfflineAudioContext(2,Math.ceil(sr*(duration+1.5)),sr),out=off.createGain(),end=off.createGain();
+ const tone=off.createBiquadFilter(),echo=off.createDelay(1),echoFeedback=off.createGain(),echoWet=off.createGain(),space=off.createConvolver(),spaceWet=off.createGain(),distortion=off.createWaveShaper(),crusher=off.createWaveShaper(),compressor=off.createDynamicsCompressor();
+ out.gain.value=+$('masterVol').value;end.gain.setValueAtTime(1,0);end.gain.setValueAtTime(1,duration);end.gain.linearRampToValueAtTime(0,duration+1.5);
+ tone.type=$('filterType').value;tone.frequency.value=+$('cutoff').value;tone.Q.value=+$('resonance').value;
+ distortion.curve=+$('drive').value>0?curve(+$('drive').value):null;crusher.curve=+$('crush').value>0?crushCurve(+$('crush').value):null;
+ echo.delayTime.value=+$('delayTime').value;echoFeedback.gain.value=+$('feedback').value;echoWet.gain.value=+$('delayMix').value;space.buffer=convolver.buffer;spaceWet.gain.value=+$('reverbMix').value;
+ compressor.threshold.value=-6;compressor.knee.value=8;compressor.ratio.value=8;compressor.attack.value=.003;compressor.release.value=.15;
+ out.connect(distortion).connect(crusher).connect(tone).connect(compressor).connect(end).connect(off.destination);
+ out.connect(echo);echo.connect(echoFeedback).connect(echo);echo.connect(echoWet).connect(tone);out.connect(space).connect(spaceWet).connect(tone);
+ // Build legacy voices synchronously in the offline context, then restore live audio
+ // before awaiting rendering. This includes user-selected sounds as well as presets.
+ const liveCtx=ctx,liveMaster=master,liveOutput=voiceOutput;
+ try{
+  ctx=off;master=out;voiceOutput=out;
+  let time=.02;
+  for(let index=0;index<steps*2;index++){
+   const column=index%steps;
+   for(let row=0;row<16;row++){const hit=sequence[row][column];if(!hit)continue;const pad=pads[row],velocity=hit.velocity??1,rate=pad.pitch*(hit.rate??1);
+    if(pad.buffer){const source=off.createBufferSource(),gain=off.createGain();source.buffer=pad.buffer;source.playbackRate.value=rate;gain.gain.value=pad.gain*velocity;source.connect(gain).connect(out);source.start(time)}else playSound(pad.sound,time,rate,pad.gain*velocity);
+   }
+   time+=LooperBeats.stepDuration(bpm,swing,column);
+  }
+  loops.filter(loop=>!loop.mute).forEach(loop=>{const source=off.createBufferSource(),gain=off.createGain();source.buffer=loop.buffer;source.loop=true;source.playbackRate.value=loop.rate;gain.gain.value=loop.gain;source.connect(gain).connect(out);source.start(.02);source.stop(duration+.02)});
+ }finally{ctx=liveCtx;master=liveMaster;voiceOutput=liveOutput}
+ status('renderowanie WAV — dwa przebiegi rytmu i warstwy loopera');
+ try{const buffer=await off.startRendering();downloadBlob(bufferToWav(buffer),'looper-beat-'+bpm+'bpm.wav');status('WAV gotowy: rytm, sample i aktywne loopy')}catch(error){status('nie udało się wyrenderować WAV: '+error.message)}
+}
 async function upload(){if(!currentBlob)return status('najpierw nagraj');let fd=new FormData();fd.append('audio',currentBlob,'recording.webm');let r=await fetch('upload.php',{method:'POST',body:fd});status((await r.json()).ok?'wysłano':'błąd uploadu')}
 
 function midiFreq(note){return 440*Math.pow(2,(note-69)/12)}
@@ -143,6 +206,6 @@ async function midi(){
 document.addEventListener('keydown',e=>{if(e.repeat)return;let k=e.key.toLowerCase();if(learnPad!==null){pads[learnPad].key=k;learnPad=null;drawPads();status('klawisz przypisany');return}let i=pads.findIndex(p=>p.key===k);if(i>=0){e.preventDefault();playPad(i);return}let pi=pcKeys.indexOf(k);if(pi>=0){e.preventDefault();triggerMidiNote(pianoStartNote()+pi,1)}});
 document.addEventListener('keyup',e=>{let pi=pcKeys.indexOf(e.key.toLowerCase()); if(pi>=0)releaseMidiNote(pianoStartNote()+pi)});
 $('bootBtn').onclick=initAudio;$('playBtn').onclick=play;$('stopBtn').onclick=stop;$('recBtn').onclick=record;$('exportBtn').onclick=exportWav;$('randomKitBtn').onclick=randomKit;$('saveKitBtn').onclick=saveKit;$('loadKitBtn').onclick=loadKit;$('downloadKitBtn').onclick=downloadKit;$('saveProjectBtn').onclick=saveProject;$('loadProjectBtn').onclick=loadProject;$('clearBtn').onclick=clearAll;$('uploadBtn').onclick=upload;$('playSampleBtn').onclick=()=>{let b=edited();if(b){let s=ctx.createBufferSource(),g=gainNode(+$('sampleGain').value);s.buffer=b;s.playbackRate.value=+$('pitch').value;s.connect(g).connect(master);s.start()}};$('reverseBtn').onclick=reverse;$('normalizeBtn').onclick=()=>normalize(currentBuffer);$('cropBtn').onclick=()=>{let b=edited();if(b){currentBuffer=b;drawWave(b);status('przycięto')}};$('assignSampleBtn').onclick=assignSample;$('chopBtn').onclick=chop;$('midiBtn').onclick=midi;$('midiInstrument').onchange=e=>{midiState.instrument=e.target.value;status('brzmienie MIDI: '+e.target.selectedOptions[0].textContent)};$('midiVol').oninput=e=>midiState.volume=+e.target.value;$('octDown').onclick=()=>{midiState.octave=Math.max(-4,midiState.octave-1);drawPiano();status('oktawa MIDI: '+midiState.octave)};$('octUp').onclick=()=>{midiState.octave=Math.min(4,midiState.octave+1);drawPiano();status('oktawa MIDI: '+midiState.octave)};$('saveMidiBtn').onclick=saveMidiPreset;$('loadMidiBtn').onclick=loadMidiPreset;$('downloadMidiBtn').onclick=downloadMidiPreset;$('soundSearch').oninput=drawSounds;$('importKit').onchange=e=>{let f=e.target.files[0];if(!f)return;f.text().then(t=>loadKitObj(JSON.parse(t)))};$('importMidi').onchange=e=>{let f=e.target.files[0];if(!f)return;f.text().then(t=>applyMidiData(JSON.parse(t)))};
-['masterVol','filterType','cutoff','resonance','delayTime','feedback','delayMix','reverbMix','drive','crush'].forEach(id=>$(id).oninput=updateFx);['trimStart','trimEnd'].forEach(id=>$(id).oninput=()=>currentBuffer&&drawWave(currentBuffer));$('steps').onchange=drawSeq;Object.keys(presets).forEach(n=>{let o=document.createElement('option');o.textContent=n;$('presetSelect').appendChild(o)});$('presetSelect').onchange=e=>applyPreset(e.target.value);
-drawPads();drawSounds();drawSeq();drawMidiInstruments();drawPiano();applyPreset('Neon House');
+['masterVol','filterType','cutoff','resonance','delayTime','feedback','delayMix','reverbMix','drive','crush'].forEach(id=>$(id).oninput=updateFx);['trimStart','trimEnd'].forEach(id=>$(id).oninput=()=>currentBuffer&&drawWave(currentBuffer));$('steps').onchange=()=>{drawSeq();markBeat('')};$('bpm').onchange=()=>markBeat(currentBeatName);Object.keys(presets).forEach(n=>{let o=document.createElement('option');o.textContent=n;$('presetSelect').appendChild(o)});$('presetSelect').onchange=e=>applyPreset(e.target.value);
+drawPads();drawSounds();drawSeq();drawMidiInstruments();drawPiano();drawBeats();applyPreset('Neon House');
 })();

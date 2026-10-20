@@ -91,6 +91,21 @@ The audio chain includes:
 - Drive distortion
 - Bitcrusher
 
+## Ready-to-play beat library
+
+Choose a card in **Biblioteka bitów** and click **Wczytaj i graj**. Ten original, synthesized two-bar grooves are included: Neon House, Lo-Fi Sunday, Boom Bap 90, Trap 808, Pocket Funk, Warehouse Techno, Liquid DnB, UK Garage, Sunset Afro and Disco Night.
+
+Each preset loads a complete 16-pad kit with balanced track gains, a 32-step pattern, velocity accents, pitched bass/keys where appropriate, tempo, swing and a mostly dry effects mix. Loading a preset replaces the current pads, sequence and effects; save a custom project first if needed. No external sample downloads are required.
+
+Drums use shaped pitch/noise envelopes rather than overlapping fixed-frequency beeps. Notes are scheduled ahead on the audio clock; swing alternates long/short steps while preserving the bar length. A master compressor controls peaks, and distortion is off by default.
+
+**Export WAV** now renders two repetitions of the current sequence, including pitched notes, custom pad samples, active (unmuted) loops and effects, followed by a short fade for the effect tail. It previously exported only recorded loop layers. The WAV uses the audio device's sample rate. Saved projects retain step velocity and pitch; older boolean step patterns remain supported.
+
+Validation:
+
+- `node tests/beats.test.cjs` checks all kits, step ranges, velocities, pitch scheduling and swing duration.
+- Serve the project locally and open `tests/audio-check.html` for real Web Audio offline renders, peak/RMS checks and playable WAV previews of all ten beats. This checks the signal, not subjective musical taste.
+
 ## Screenshots
 
 ### MIDI Trainer
