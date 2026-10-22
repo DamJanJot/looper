@@ -8,6 +8,11 @@ The project originally started as a loop station and pad sequencer. Its current 
   <img src="https://github.com/user-attachments/assets/568732e8-70a3-4f05-ad5b-b372bb71d87b" alt="MIDI Trainer interface" width="100%">
 </p>
 
+---
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/45ede91a-6105-4e91-99ea-d3614f6c4a8c" />
+
+---
+
 ## Main modules
 
 ### MIDI Trainer
